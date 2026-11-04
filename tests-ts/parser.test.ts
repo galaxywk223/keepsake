@@ -31,6 +31,14 @@ describe('source parser', () => {
     expect(extractUrls(text)).toEqual(['http://xhslink.com/a/AbCdEf'])
   })
 
+  test('keeps the access token when extracting a PC share text', async () => {
+    const text = `91 【标题 - 作者 | 小红书 - 你的生活兴趣社区】 😆 ngJYN0BKdFAIVa5 😆 https://www.xiaohongshu.com/discovery/item/${NOTE_ID}?source=webshare&xhsshare=pc_web&xsec_token=AB4G_x-y=&xsec_source=pc_share`
+    const [url] = extractUrls(text)
+    expect(await normalizeSourceUrl(url))
+      .toBe(`https://www.xiaohongshu.com/explore/${NOTE_ID}?xsec_token=AB4G_x-y%3D&xsec_source=pc_share`)
+    expect(extractUrls('链接 https://v.douyin.com/abc/? 打开')).toEqual(['https://v.douyin.com/abc/'])
+  })
+
   test('canonicalizes note URLs and keeps only the access token parameters', async () => {
     const url = `https://www.xiaohongshu.com/discovery/item/${NOTE_ID}?app_platform=ios&xsec_token=TOKEN%3D&xsec_source=app_share&share_id=1`
     expect(await normalizeSourceUrl(url))

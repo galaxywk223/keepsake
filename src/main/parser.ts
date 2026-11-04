@@ -1,13 +1,14 @@
 import type { Platform } from '../shared/contracts'
 import { extractorFor } from './platforms'
 
-const URL_PATTERN = /https?:\/\/[^\s，。；、！!？?）)】\]]+/g
+// ASCII `?` must stay inside the match: Xiaohongshu links need their query (xsec_token).
+const URL_PATTERN = /https?:\/\/[^\s，。；、！？）)】\]]+/g
 
 export function extractUrls(text: string): string[] {
   const seen = new Set<string>()
   const result: string[] = []
   for (const raw of text.match(URL_PATTERN) ?? []) {
-    const url = raw.replace(/[.,;:]+$/, '')
+    const url = raw.replace(/[.,;:!?]+$/, '')
     if (!seen.has(url)) {
       seen.add(url)
       result.push(url)

@@ -7,6 +7,7 @@ const KEPT_PARAMS = ['xsec_token', 'xsec_source'] as const
 const FEED_PATH = '/api/sns/web/v1/feed'
 const CAPTURE_TIMEOUT_MS = 60_000
 const POLL_MS = 500
+const WARM_UP_MS = 8_000
 
 export const XHS_LOGIN_REQUIRED = '需要登录小红书或完成验证，请打开登录浏览器处理'
 export const XHS_UNAVAILABLE = '小红书笔记无法访问，请使用 App 中“分享 → 复制链接”得到的完整链接'
@@ -37,15 +38,31 @@ export function blockedReason(pageUrl: string): string | null {
   return null
 }
 
+/**
+ * Stream groups are keyed by codec (`h264`, `h265`, ...) or by obfuscated keys (`EF4`, `EF5`, ...),
+ * so every group is read. fMP4/DASH segments carry no audio and are skipped.
+ */
 function streamUrls(stream: any): string[] {
+  if (!stream || typeof stream !== 'object') return []
+  const variants = Object.values(stream).flatMap((group) => Array.isArray(group) ? group : [])
+    .filter((variant: any) => {
+      const url = String(variant?.masterUrl ?? '')
+      return url && variant?.format !== 'fmp4' && !/\.m4s(?:[?#]|$)/i.test(url)
+    })
+  const score = (variant: any) => [
+    Number(variant?.audioBitrate) > 0 || Boolean(variant?.audioCodec) || variant?.audioBitrate === undefined ? 1 : 0,
+    String(variant?.videoCodec ?? '').toLowerCase() === 'h265' ? 0 : 1,
+    Number(variant?.avgBitrate || 0),
+  ]
+  variants.sort((a: any, b: any) => {
+    const left = score(a); const right = score(b)
+    for (let index = 0; index < left.length; index += 1) if (left[index] !== right[index]) return right[index] - left[index]
+    return 0
+  })
   const urls: string[] = []
-  for (const codec of ['h264', 'h265']) {
-    const variants = Array.isArray(stream?.[codec]) ? [...stream[codec]] : []
-    variants.sort((a: any, b: any) => Number(b?.avgBitrate || 0) - Number(a?.avgBitrate || 0))
-    for (const variant of variants) {
-      if (variant?.masterUrl) urls.push(String(variant.masterUrl))
-      if (Array.isArray(variant?.backupUrls)) urls.push(...variant.backupUrls.map(String))
-    }
+  for (const variant of variants as any[]) {
+    urls.push(String(variant.masterUrl))
+    if (Array.isArray(variant.backupUrls)) urls.push(...variant.backupUrls.map(String))
   }
   return unique(urls)
 }
@@ -70,7 +87,12 @@ function imageUrls(image: any): string[] {
   }
   for (const key of ['urlDefault', 'url', 'urlPre']) if (image?.[key]) listed.push(String(image[key]))
   const token = listed.map(imageToken).find(Boolean)
-  const originals = token ? [`https://sns-img-bd.xhscdn.com/${token}`, `https://ci.xiaohongshu.com/${token}`] : []
+  // Originals are stored as HEIC; ask the CDN for a lossless PNG at full size, then JPEG, then the listed WebP.
+  const originals = token ? [
+    `https://sns-img-bd.xhscdn.com/${token}?imageView2/format/png`,
+    `https://ci.xiaohongshu.com/${token}?imageView2/format/png`,
+    `https://sns-img-bd.xhscdn.com/${token}?imageView2/format/jpg`,
+  ] : []
   return unique([...originals, ...listed].map(httpsUrl))
 }
 
@@ -115,14 +137,58 @@ async function readInitialState(page: Page, id: string | null): Promise<Record<s
     const state = (window as any).__INITIAL_STATE__
     const map = state?.note?.noteDetailMap
     if (!map) return null
-    const key = noteId && map[noteId] ? noteId : state?.note?.firstNoteId ?? Object.keys(map).find((value) => value && value !== 'undefined')
+    const first = state?.note?.firstNoteId
+    const firstId = typeof first === 'string' ? first : first?._value ?? first?.value
+    const key = noteId && map[noteId] ? noteId
+      : firstId && map[firstId] ? firstId : Object.keys(map).find((value) => value && value !== 'undefined')
     const note = key ? map[key]?.note : null
     if (!note || (!note.noteId && !note.imageList && !note.video)) return null
-    return JSON.parse(JSON.stringify(note))
+    // Vue reactive state can contain refs and dependency cycles, so plain JSON.stringify may throw.
+    const seen = new WeakSet<object>()
+    const clone = (value: any, depth: number): any => {
+      if (value && typeof value === 'object' && '__v_isRef' in value) value = value._value
+      if (value === null || typeof value !== 'object') return typeof value === 'function' ? undefined : value
+      if (depth > 12 || seen.has(value)) return undefined
+      seen.add(value)
+      if (Array.isArray(value)) return value.map((item) => clone(item, depth + 1))
+      const result: Record<string, any> = {}
+      for (const [name, item] of Object.entries(value)) {
+        if (name === 'dep' || name === 'deps' || name.startsWith('__v_')) continue
+        result[name] = clone(item, depth + 1)
+      }
+      return result
+    }
+    return clone(note, 0)
   }, id) as Promise<Record<string, any> | null>
 }
 
+/** A blank profile lacks the guest session cookies, and some notes then redirect to 404. */
+async function warmUp(page: Page): Promise<void> {
+  await page.goto(xiaohongshu.homeUrl, { waitUntil: 'domcontentloaded', timeout: CAPTURE_TIMEOUT_MS })
+  const deadline = Date.now() + WARM_UP_MS
+  while (Date.now() < deadline) {
+    if (await hasSession(page) !== false) return
+    await delay(POLL_MS)
+  }
+}
+
+/** True/false when cookies can be read; null when the page cannot report them. */
+async function hasSession(page: Page): Promise<boolean | null> {
+  try {
+    const cookies = await page.browser().cookies()
+    return cookies.some((cookie) => cookie.name === 'web_session' && cookie.domain.endsWith('xiaohongshu.com'))
+  } catch {
+    return null
+  }
+}
+
 async function capture(page: Page, url: string, signal: AbortSignal): Promise<SiteDetail> {
+  if (await hasSession(page) === false) await warmUp(page)
+  if (signal.aborted) throw new DownloadCancelled('下载已取消')
+  return captureNote(page, url, signal, true)
+}
+
+async function captureNote(page: Page, url: string, signal: AbortSignal, retry: boolean): Promise<SiteDetail> {
   let fromFeed: Record<string, any> | null = null
   page.on('response', async (response: HTTPResponse) => {
     if (fromFeed || !response.url().includes(FEED_PATH)) return
@@ -142,6 +208,12 @@ async function capture(page: Page, url: string, signal: AbortSignal): Promise<Si
     if (signal.aborted) throw new DownloadCancelled('下载已取消')
     const current = page.url()
     const blocked = blockedReason(current)
+    if (blocked === XHS_UNAVAILABLE && retry) {
+      page.removeAllListeners('response')
+      await warmUp(page)
+      if (signal.aborted) throw new DownloadCancelled('下载已取消')
+      return captureNote(page, url, signal, false)
+    }
     if (blocked) throw new Error(blocked)
     id = id ?? extractId(current)
     const note = fromFeed ?? await readInitialState(page, id).catch(() => null)
@@ -174,8 +246,12 @@ function mapStream(stream: any): any {
     masterUrl: variant?.master_url ?? variant?.masterUrl,
     backupUrls: variant?.backup_urls ?? variant?.backupUrls,
     avgBitrate: variant?.avg_bitrate ?? variant?.avgBitrate,
+    audioBitrate: variant?.audio_bitrate ?? variant?.audioBitrate,
+    audioCodec: variant?.audio_codec ?? variant?.audioCodec,
+    videoCodec: variant?.video_codec ?? variant?.videoCodec,
+    format: variant?.format,
   })) : []
-  return { h264: map(stream.h264), h265: map(stream.h265) }
+  return Object.fromEntries(Object.entries(stream).map(([key, variants]) => [key, map(variants)]))
 }
 
 function httpsUrl(url: string): string {

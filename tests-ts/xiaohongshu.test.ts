@@ -17,10 +17,10 @@ const image = (name: string, extra: Record<string, unknown> = {}) => ({
 })
 const stream = (url: string) => ({
   h264: [
-    { masterUrl: `${url}-low.mp4`, avgBitrate: 500, backupUrls: [`${url}-low-backup.mp4`] },
-    { masterUrl: `${url}-high.mp4`, avgBitrate: 2000, backupUrls: [] },
+    { masterUrl: `${url}-low.mp4`, videoCodec: 'h264', avgBitrate: 500, backupUrls: [`${url}-low-backup.mp4`] },
+    { masterUrl: `${url}-high.mp4`, videoCodec: 'h264', avgBitrate: 2000, backupUrls: [] },
   ],
-  h265: [{ masterUrl: `${url}-hevc.mp4`, avgBitrate: 1500 }],
+  h265: [{ masterUrl: `${url}-hevc.mp4`, videoCodec: 'h265', avgBitrate: 1500 }],
 })
 
 function fakePage(url: string, note: Record<string, unknown> | null) {
@@ -41,7 +41,7 @@ describe('xiaohongshu candidates', () => {
     const [candidate] = xiaohongshuCandidates({ type: 'normal', imageList: [image('abc')] })
     expect(candidate.kind).toBe('image')
     expect(candidate.sequence).toBe(1)
-    expect(candidate.urls[0]).toBe('https://sns-img-bd.xhscdn.com/1040g00831abc')
+    expect(candidate.urls[0]).toBe('https://sns-img-bd.xhscdn.com/1040g00831abc?imageView2/format/png')
     expect(candidate.urls).toContain(`${CDN.replace('http://', 'https://')}/1040g00831abc!nd_dft_wlteh_webp_3`)
   })
 
@@ -65,6 +65,28 @@ describe('xiaohongshu candidates', () => {
       'https://video.test/v-low.mp4',
       'https://video.test/v-low-backup.mp4',
       'https://video.test/v-hevc.mp4',
+    ])
+  })
+
+  test('reads obfuscated stream groups and skips audio-less fMP4 segments', () => {
+    // Shape observed on xiaohongshu.com in 2026-11: codec keys are replaced by EF4/EF5/...
+    const [candidate] = xiaohongshuCandidates({
+      type: 'video',
+      video: { media: { stream: {
+        EF4: [{
+          format: 'mp4', videoCodec: 'EF4', audioCodec: 'aac', audioBitrate: 56340, avgBitrate: 906183,
+          masterUrl: 'http://sns-video-qc.xhscdn.com/stream/a_258.mp4?sign=s', backupUrls: ['http://sns-bak-v6.xhscdn.com/stream/a_258.mp4'],
+        }],
+        EF5: [{
+          format: 'fmp4', videoCodec: 'EF5', audioBitrate: 0, avgBitrate: 2_000_000,
+          masterUrl: 'http://sns-video-qc.xhscdn.com/stream/a_3090.m4s?sign=s', backupUrls: [],
+        }],
+        EF6: [],
+      } } },
+    })
+    expect(candidate.urls).toEqual([
+      'https://sns-video-qc.xhscdn.com/stream/a_258.mp4?sign=s',
+      'https://sns-bak-v6.xhscdn.com/stream/a_258.mp4',
     ])
   })
 
@@ -102,6 +124,26 @@ describe('xiaohongshu page state', () => {
       new AbortController().signal)
     expect(detail.title).toBe('标题')
     expect(detail.candidates).toHaveLength(1)
+  })
+
+  test('warms up a blank profile and retries once after a 404 redirect', async () => {
+    const urls = [
+      `https://www.xiaohongshu.com/404?source=note&noteId=${NOTE_ID}&errorCode=-510001`,
+      `https://www.xiaohongshu.com/explore/${NOTE_ID}`,
+    ]
+    let session = false
+    const page = Object.assign(new EventEmitter(), {
+      goto: vi.fn(async (target: string) => { if (target.includes('/explore') && !target.includes(NOTE_ID)) session = true }),
+      url: vi.fn(() => (page.goto.mock.calls.length > 2 ? urls[1] : urls[0])),
+      evaluate: vi.fn(async () => (page.goto.mock.calls.length > 2
+        ? { noteId: NOTE_ID, type: 'normal', title: '重试', imageList: [image('abc')] } : null)),
+      browser: () => ({ cookies: async () => (session ? [{ name: 'web_session', domain: '.xiaohongshu.com' }] : []) }),
+    })
+    const detail = await xiaohongshu.capture(page as unknown as Page, `https://www.xiaohongshu.com/explore/${NOTE_ID}?xsec_token=t`,
+      new AbortController().signal)
+    expect(detail.title).toBe('重试')
+    // home (no session) → note (404) → home again → note
+    expect(page.goto.mock.calls.map(([target]) => String(target).includes(NOTE_ID))).toEqual([false, true, false, true])
   })
 
   test('fails fast when redirected to the login page', async () => {
