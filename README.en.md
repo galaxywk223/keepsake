@@ -8,7 +8,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)](#installation)
 [![License](https://img.shields.io/github/license/galaxywk223/keepsake)](LICENSE)
 
-Keepsake is a local-first Douyin downloader and media library for Windows and Android. Paste a share link to batch-download videos and image posts, extract audio, and browse and organize everything in a local library. Your data stays on your own device.
+Keepsake is a local-first downloader and media library for Douyin and Xiaohongshu (RED), available for Windows and Android. Paste a share link to batch-download videos, image posts, and live photos, extract audio, and browse and organize everything in a local library. Your data stays on your own device.
 
 > [!WARNING]
 > This project is for personal learning and research only. **Commercial use and any unlawful use are prohibited.** Only download content you have the right to keep, and follow applicable laws and platform terms. By using this project you agree to the [Disclaimer](DISCLAIMER.md#english).
@@ -21,7 +21,8 @@ Keepsake is a local-first Douyin downloader and media library for Windows and An
 
 ### Windows desktop
 
-- Batch-extract Douyin posts from share text, short links, or post URLs.
+- Batch-extract **Douyin** posts and **Xiaohongshu** notes from share text, short links, or post URLs.
+- Xiaohongshu live photos are saved as both the still image and its short video, grouped under one item in the library.
 - Download images and videos with live progress.
 - Extract MP3 audio (192 kbps) from downloaded videos. FFmpeg is bundled with the installer.
 - Automatically index the local download folder and group multi-image posts together.
@@ -32,7 +33,7 @@ Keepsake is a local-first Douyin downloader and media library for Windows and An
 
 ### Android
 
-- Sign in to Douyin inside the app, then paste a share link to parse and download posts.
+- Sign in to Douyin inside the app, then paste a share link to parse and download posts (Xiaohongshu is not yet supported on Android).
 - Download task list, local media library, and media viewer.
 - Extract MP3 audio locally with FFmpegKit. Nothing is uploaded.
 - Export media to the system gallery or media store.
@@ -57,8 +58,8 @@ See [CHANGELOG.md](CHANGELOG.md) (in Chinese) for version history.
 ## Usage
 
 1. In Settings, check that Edge or Chrome is available on your system.
-2. Click "Configure login" (配置登录) and sign in to Douyin in the dedicated browser window.
-3. On the Download page, paste share text or a post link and parse it.
+2. Click "Configure login" (配置登录) and sign in to Douyin and/or Xiaohongshu in their tabs of the dedicated browser window.
+3. On the Download page, paste share text or a post link and parse it. For Xiaohongshu, use the link from "Share → Copy link" in the app, which carries the required access parameters.
 4. Select the posts you want and create a download task.
 5. Preview, filter, and manage your files in the Library.
 
@@ -78,7 +79,8 @@ Existing installs keep the download folder stored in the database. You can chang
 ## Roadmap
 
 - [ ] TikTok support
-- [ ] Xiaohongshu (RED) support
+- [x] Xiaohongshu (RED) support (desktop)
+- [ ] Xiaohongshu support on Android
 - [ ] More sites such as Kuaishou and Bilibili
 - [ ] macOS and Linux builds
 - [ ] Official Android release
@@ -122,6 +124,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 ## Architecture
 
 - **Desktop**: The Electron main process owns the window lifecycle, SQLite, the file system, the download queue, and browser automation. A context bridge exposes a restricted desktop API, and IPC input is validated with Zod. The renderer uses React, TypeScript, TanStack Query, and Radix UI. A custom `oml-media://` protocol serves previews by media ID, restricted to the download folder. electron-vite handles the three-layer build, and electron-builder produces the NSIS x64 installer.
+- **Site extractors**: Site-specific parsing lives in `src/main/platforms/`. Each site implements a `SiteExtractor`, so adding a site means adding one module.
 - **Android**: Kotlin and Jetpack Compose, with Room for storage, WebView for login, and FFmpegKit for audio conversion.
 
 See the [architecture notes](docs/ARCHITECTURE.md) (in Chinese) for boundaries and data flow.
@@ -130,11 +133,11 @@ See the [architecture notes](docs/ARCHITECTURE.md) (in Chinese) for boundaries a
 
 - The desktop app supports Windows 10/11 x64 only. There are no macOS or Linux builds yet.
 - The installer is not code-signed. There is no tray mode, and no telemetry.
-- Downloads depend on Douyin's web APIs and login state, so platform changes may break them.
+- Downloads depend on Douyin's and Xiaohongshu's web APIs and login state, so platform changes may break them. Xiaohongshu applies stricter anti-bot checks and may ask you to complete a verification in the login browser.
 
 ## Disclaimer
 
-This project is not affiliated with Douyin, ByteDance, Microsoft, or Google. See [DISCLAIMER.md](DISCLAIMER.md#english) for the full terms.
+This project is not affiliated with Douyin, ByteDance, Xiaohongshu, Microsoft, or Google. See [DISCLAIMER.md](DISCLAIMER.md#english) for the full terms.
 
 ## License
 

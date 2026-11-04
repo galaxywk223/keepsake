@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Clipboard, Download, ExternalLink, Link2, LogIn, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { api } from '../api'
+import { workLabel } from '../format'
 import type { ParsedSource } from '../types'
 import { JobList } from './JobList'
 
@@ -43,7 +44,7 @@ export function DownloadPage() {
   })
   const login = useMutation({
     mutationFn: api.openLogin,
-    onSuccess: () => setMessage('已打开登录浏览器，完成登录后关闭窗口'),
+    onSuccess: () => setMessage('已打开登录浏览器，请在对应标签页登录抖音或小红书，完成后关闭窗口'),
   })
 
   const paste = async () => {
@@ -74,7 +75,7 @@ export function DownloadPage() {
           <div className="composer-head">
             <div>
               <h2>粘贴分享内容</h2>
-              <p>支持分享文案、短链接和多个抖音作品链接</p>
+              <p>支持抖音、小红书的分享文案、短链接和作品链接，可一次粘贴多条</p>
             </div>
             <button className="ghost-button" onClick={() => login.mutate()} type="button">
               <LogIn size={16} />打开登录浏览器
@@ -82,7 +83,7 @@ export function DownloadPage() {
           </div>
           <textarea
             aria-label="分享内容"
-            placeholder="粘贴抖音分享文本或链接，支持多条"
+            placeholder="粘贴抖音或小红书分享文本、链接，支持多条"
             value={text}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
@@ -129,7 +130,7 @@ export function DownloadPage() {
                   <span className="selection-box">{selected.has(source.url) ? <Check size={13} strokeWidth={3} /> : null}</span>
                   <span className="source-icon"><Link2 size={18} /></span>
                   <span className="source-info">
-                    <strong>{source.aweme_id ? `抖音作品 ${source.aweme_id}` : '抖音分享链接'}</strong>
+                    <strong>{workLabel(source.platform, source.aweme_id)}</strong>
                     <small>{source.url}</small>
                   </span>
                   {source.duplicate ? <span className="duplicate-label">已在媒体库</span> : <ExternalLink size={15} />}

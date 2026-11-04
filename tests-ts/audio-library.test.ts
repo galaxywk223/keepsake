@@ -86,3 +86,19 @@ test('rejects an output path already owned by another collection', async () => {
   await library.addDownload({ title: '二', author: null, sourceUrl: 'https://www.douyin.com/video/2', awemeId: '2', sourceCreatedAt: null, paths: [existingAudio] })
   await expect(library.addExtractedAudio(first.id, first.assets![0].id, paths.defaultDownloadDir, vi.fn())).rejects.toBeInstanceOf(MediaPathConflictError)
 })
+
+test('scopes duplicate detection and live photo pairs by platform', async () => {
+  const { library, paths } = await createContext()
+  const image = join(paths.defaultDownloadDir, '笔记_01.jpg')
+  const live = join(paths.defaultDownloadDir, '笔记_01.mp4')
+  await writeFile(image, Buffer.from('image'))
+  await writeFile(live, Buffer.from('video'))
+  const note = await library.addDownload({
+    title: '笔记', author: null, sourceUrl: 'https://www.xiaohongshu.com/explore/abc', platform: 'xiaohongshu',
+    awemeId: 'abc', sourceCreatedAt: null, paths: [image, live],
+  })
+
+  expect(note).toMatchObject({ platform: 'xiaohongshu', media_type: 'mixed', item_count: 2 })
+  expect(library.duplicate('xiaohongshu', 'abc')?.id).toBe(note.id)
+  expect(library.duplicate('douyin', 'abc')).toBeNull()
+})

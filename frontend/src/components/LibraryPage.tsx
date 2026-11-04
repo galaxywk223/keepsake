@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AudioLines, Check, Grid2X2, Images, LayoutList, Play, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { api } from '../api'
-import { formatBytes } from '../format'
+import { formatBytes, platformLabel } from '../format'
 import type { Collection } from '../types'
 import { MediaViewer } from './MediaViewer'
 
@@ -135,7 +135,7 @@ function MediaItem({ item, selected, view, onSelect, onOpen }: MediaItemProps) {
       </button>
       <div className="media-caption" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') onOpen() }}>
         <strong title={item.title}>{item.title}</strong>
-        <span>{item.author || (item.imported ? '本地文件' : '抖音')} · {date}</span>
+        <span>{item.author || (item.imported ? '本地文件' : platformLabel(item.platform))} · {date}</span>
         {view === 'list' ? <small>{formatBytes(item.total_size)} · {item.item_count} 个文件</small> : null}
       </div>
     </article>

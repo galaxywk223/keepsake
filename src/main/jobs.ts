@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import type { Job } from '../shared/contracts'
+import type { Job, Platform } from '../shared/contracts'
 import { AppDatabase, sqliteNow, toIso } from './database'
 import { BrowserDownloader, BrowserProfileRecoveryError, DownloadCancelled } from './downloader'
 import { LibraryService, MediaPathConflictError } from './library'
+import { XHS_LOGIN_REQUIRED } from './platforms/xiaohongshu'
 
 type Row = Record<string, any>
 
 function jobFromRow(row: Row): Job {
   return {
-    id: String(row.id), source_url: String(row.source_url), aweme_id: row.aweme_id ?? null,
+    id: String(row.id), source_url: String(row.source_url), platform: row.platform ?? 'douyin', aweme_id: row.aweme_id ?? null,
     title: row.title ?? null, status: String(row.status), progress: Number(row.progress),
     downloaded_bytes: Number(row.downloaded_bytes), total_bytes: Number(row.total_bytes),
     current_item: Number(row.current_item), total_items: Number(row.total_items), error: row.error ?? null,
@@ -74,14 +75,14 @@ export class JobManager {
     return row ? jobFromRow(row) : null
   }
 
-  create(sourceUrl: string, awemeId: string | null, outputDir: string, force: boolean): Job {
+  create(sourceUrl: string, platform: Platform, awemeId: string | null, outputDir: string, force: boolean): Job {
     const id = randomUUID().replaceAll('-', '')
     const now = sqliteNow()
     this.database.connection.prepare(`INSERT INTO download_jobs
-      (id, source_url, aweme_id, title, status, progress, downloaded_bytes, total_bytes,
+      (id, source_url, platform, aweme_id, title, status, progress, downloaded_bytes, total_bytes,
        current_item, total_items, error, output_dir, force, collection_id, created_at, updated_at, completed_at)
-      VALUES (?, ?, ?, NULL, 'queued', 0, 0, 0, 0, 0, NULL, ?, ?, NULL, ?, ?, NULL)`)
-      .run(id, sourceUrl, awemeId, outputDir, force ? 1 : 0, now, now)
+      VALUES (?, ?, ?, ?, NULL, 'queued', 0, 0, 0, 0, 0, NULL, ?, ?, NULL, ?, ?, NULL)`)
+      .run(id, sourceUrl, platform, awemeId, outputDir, force ? 1 : 0, now, now)
     this.queue.push(id)
     this.notify()
     void this.processNext()
@@ -157,11 +158,11 @@ export class JobManager {
       if (controller.signal.aborted) throw new DownloadCancelled('下载已取消')
       const collection = await this.library.addDownload({
         title: result.title || result.awemeId || '未命名作品', author: result.author, sourceUrl: result.sourceUrl,
-        awemeId: result.awemeId, sourceCreatedAt: result.sourceCreatedAt, paths: result.paths,
+        platform: result.platform, awemeId: result.awemeId, sourceCreatedAt: result.sourceCreatedAt, paths: result.paths,
       })
-      db.prepare(`UPDATE download_jobs SET title = ?, aweme_id = ?, status = 'completed', progress = 1,
+      db.prepare(`UPDATE download_jobs SET title = ?, platform = ?, aweme_id = ?, status = 'completed', progress = 1,
         current_item = ?, total_items = ?, collection_id = ?, error = NULL, completed_at = ?, updated_at = ? WHERE id = ?`)
-        .run(result.title, result.awemeId, result.paths.length, result.paths.length, collection.id, sqliteNow(), sqliteNow(), id)
+        .run(result.title, result.platform, result.awemeId, result.paths.length, result.paths.length, collection.id, sqliteNow(), sqliteNow(), id)
     } catch (error) {
       const cancelled = error instanceof DownloadCancelled || controller.signal.aborted
       const message = cancelled ? null : friendlyError(error)
@@ -177,7 +178,7 @@ export class JobManager {
 export function friendlyError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error)
   const lower = text.toLowerCase()
-  if (text.includes('登录浏览器仍在运行') || text.includes('登录浏览器已打开')) return text.slice(0, 300)
+  if (text.includes('登录浏览器仍在运行') || text.includes('登录浏览器已打开') || text === XHS_LOGIN_REQUIRED) return text.slice(0, 300)
   if (error instanceof MediaPathConflictError || lower.includes('unique constraint failed: media_assets.path')) {
     return error instanceof MediaPathConflictError ? text : '媒体文件已存在于媒体库，未自动合并'
   }

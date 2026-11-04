@@ -95,5 +95,28 @@ export class AppDatabase {
     `)
     const now = sqliteNow()
     this.connection.prepare('INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(1, ?)').run(now)
+    this.migratePlatform(now)
+  }
+
+  /** v2: records which site a job or collection came from; existing rows are Douyin. */
+  private migratePlatform(now: string): void {
+    const applied = this.connection.prepare('SELECT 1 FROM schema_migrations WHERE version = 2').get()
+    if (applied) return
+    this.connection.exec('BEGIN')
+    try {
+      for (const table of ['media_collections', 'download_jobs']) {
+        const columns = this.connection.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+        if (!columns.some((column) => column.name === 'platform')) {
+          this.connection.exec(`ALTER TABLE ${table} ADD COLUMN platform VARCHAR(32) NOT NULL DEFAULT 'douyin'`)
+        }
+      }
+      this.connection.exec(`CREATE INDEX IF NOT EXISTS ix_media_collections_platform_aweme_id
+        ON media_collections(platform, aweme_id)`)
+      this.connection.prepare('INSERT INTO schema_migrations(version, applied_at) VALUES(2, ?)').run(now)
+      this.connection.exec('COMMIT')
+    } catch (error) {
+      this.connection.exec('ROLLBACK')
+      throw error
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, CircleX, Inbox, LoaderCircle, RefreshCw, Square } from 'lucide-react'
-import { formatBytes } from '../format'
+import { formatBytes, workLabel } from '../format'
 import type { Job } from '../types'
 
 const statusLabels: Record<string, string> = {
@@ -34,7 +34,7 @@ export function JobList({ jobs, compact = false, onCancel, onRetry }: JobListPro
       {jobs.map((job) => {
         const active = ['queued', 'resolving', 'downloading'].includes(job.status)
         const failed = ['failed', 'interrupted', 'cancelled'].includes(job.status)
-        const title = job.title || `抖音作品 ${job.aweme_id || ''}`.trim()
+        const title = job.title || workLabel(job.platform, job.aweme_id)
         return (
           <article className="job-row" key={job.id}>
             <div className={`job-icon status-${job.status}`}>

@@ -1,5 +1,7 @@
 export type PageId = 'download' | 'library' | 'tasks'
 
+export type Platform = 'douyin' | 'xiaohongshu'
+
 export type UpdatePhase = 'unsupported' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error'
 
 export interface UpdateStatus {
@@ -12,6 +14,7 @@ export interface UpdateStatus {
 
 export interface ParsedSource {
   url: string
+  platform: Platform
   aweme_id: string | null
   duplicate: boolean
   existing_collection_id: string | null
@@ -20,6 +23,7 @@ export interface ParsedSource {
 export interface Job {
   id: string
   source_url: string
+  platform: Platform
   aweme_id: string | null
   title: string | null
   status: string
@@ -50,6 +54,7 @@ export interface Asset {
 
 export interface Collection {
   id: string
+  platform: Platform
   aweme_id: string | null
   source_url: string | null
   title: string

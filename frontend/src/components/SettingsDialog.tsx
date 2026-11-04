@@ -108,7 +108,7 @@ export function SettingsDialog({ open, settings, onOpenChange }: SettingsDialogP
                 <div className="settings-panel">
                   <div className="settings-row">
                     <CheckCircle2 size={18} className={settings?.browser_profile_ready ? 'success' : 'muted'} />
-                    <span>抖音登录环境</span>
+                    <span>登录环境（抖音 / 小红书）</span>
                     <strong>{settings?.browser_profile_ready ? '已配置' : '未配置'}</strong>
                   </div>
                   <div className="settings-row">

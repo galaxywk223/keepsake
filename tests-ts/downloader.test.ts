@@ -109,7 +109,7 @@ describe('BrowserDownloader profile recovery', () => {
       paths.defaultDownloadDir,
       new AbortController().signal,
       () => undefined,
-    )).rejects.toThrow('需要先打开登录浏览器并完成抖音登录')
+    )).rejects.toThrow('需要先打开登录浏览器并完成登录')
 
     expect(browserApi.launch).not.toHaveBeenCalled()
     expect(browserApi.connect).not.toHaveBeenCalled()
@@ -245,6 +245,57 @@ describe('BrowserDownloader profile recovery', () => {
     expect(browserApi.connect).toHaveBeenCalledWith({
       browserWSEndpoint: 'ws://127.0.0.1:9222/devtools/browser/test-id',
     })
+  })
+
+  test('downloads Xiaohongshu live photos as paired files and falls back between URLs', async () => {
+    const paths = await createPaths()
+    const noteId = '6720a3f0000000001b0123ab'
+    const page = Object.assign(new FakePage(), {
+      url: vi.fn(() => `https://www.xiaohongshu.com/explore/${noteId}`),
+      evaluate: vi.fn(async () => ({
+        noteId, type: 'normal', title: '实况笔记', user: { nickname: '作者' },
+        imageList: [
+          { urlDefault: 'https://sns-webpic-qc.xhscdn.com/202611041200/abcdef/tokenone!nd_dft_wlteh_webp_3' },
+          {
+            urlDefault: 'https://sns-webpic-qc.xhscdn.com/202611041200/abcdef/tokentwo!nd_dft_wlteh_webp_3',
+            livePhoto: true, stream: { h264: [{ masterUrl: 'https://video.test/live.mp4' }] },
+          },
+        ],
+      })),
+    })
+    const browserApi: BrowserApi = {
+      launch: vi.fn(async () => asBrowser(new FakeBrowser(page))),
+      connect: vi.fn(async () => { throw new Error('not running') }),
+    }
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>).Referer).toBe('https://www.xiaohongshu.com/')
+      if (url.startsWith('https://sns-img-bd.xhscdn.com/tokenone')) return new Response('missing', { status: 404 })
+      if (url.startsWith('https://sns-img-bd.xhscdn.com/tokentwo')) {
+        return new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      const video = url.endsWith('.mp4')
+      return new Response(new Uint8Array([1, 2]), {
+        status: 200, headers: { 'content-type': video ? 'video/mp4' : 'image/jpeg', 'content-length': '2' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createDownloader(paths, browserApi).download(
+      `https://www.xiaohongshu.com/explore/${noteId}?xsec_token=t`,
+      paths.defaultDownloadDir,
+      new AbortController().signal,
+      () => undefined,
+    )
+
+    expect(result).toMatchObject({ platform: 'xiaohongshu', awemeId: noteId, author: '作者' })
+    expect(result.paths.map((path) => path.split(/[\\/]/).at(-1))).toEqual([
+      '实况笔记_01.jpg', '实况笔记_02.jpg', '实况笔记_02.mp4',
+    ])
+  })
+
+  test('maps the Xiaohongshu login wall to its own message', () => {
+    expect(friendlyError(new Error('需要登录小红书或完成验证，请打开登录浏览器处理')))
+      .toBe('需要登录小红书或完成验证，请打开登录浏览器处理')
   })
 
   test('keeps visible-login and background-profile errors distinct', () => {

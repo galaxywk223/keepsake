@@ -2,7 +2,7 @@ import { nativeImage, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
-import type { Asset, Collection, LibraryQuery, LibraryResult } from '../shared/contracts'
+import type { Asset, Collection, LibraryQuery, LibraryResult, Platform } from '../shared/contracts'
 import type { AppPaths } from './paths'
 import { AppDatabase, sqliteNow, toIso } from './database'
 
@@ -148,7 +148,7 @@ export class LibraryService {
   }
 
   async addDownload(input: {
-    title: string; author: string | null; sourceUrl: string; awemeId: string | null;
+    title: string; author: string | null; sourceUrl: string; platform?: Platform; awemeId: string | null;
     sourceCreatedAt: string | null; paths: string[]
   }): Promise<Collection> {
     return this.serialize(async () => {
@@ -157,7 +157,7 @@ export class LibraryService {
       const pathKeys = paths.map((path) => path.toLowerCase())
       if (new Set(pathKeys).size !== paths.length) throw new MediaPathConflictError('下载结果包含重复文件路径')
       const placeholders = paths.map(() => '?').join(', ')
-      const existing = paths.length ? db.prepare(`SELECT a.*, c.imported, c.aweme_id, c.source_url
+      const existing = paths.length ? db.prepare(`SELECT a.*, c.imported, c.platform, c.aweme_id, c.source_url
         FROM media_assets a JOIN media_collections c ON c.id = a.collection_id
         WHERE LOWER(a.path) IN (${placeholders})`).all(...pathKeys) as Row[] : []
       const official = existing.filter((row) => !row.imported)
@@ -167,7 +167,7 @@ export class LibraryService {
         const sameDownload = collectionId && existing.length === paths.length
           && existing.every((row) => String(row.collection_id) === collectionId)
           && official.every((row) => input.awemeId
-            ? row.aweme_id === input.awemeId : row.source_url === input.sourceUrl)
+            ? row.platform === (input.platform ?? 'douyin') && row.aweme_id === input.awemeId : row.source_url === input.sourceUrl)
         if (sameDownload) return this.getCollection(collectionId)
         throw new MediaPathConflictError('媒体文件已存在于其他作品，未自动合并')
       }
@@ -182,9 +182,9 @@ export class LibraryService {
       db.exec('BEGIN')
       try {
         db.prepare(`INSERT INTO media_collections
-          (id, aweme_id, source_url, title, author, media_type, item_count, imported, source_created_at, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`)
-          .run(collectionId, input.awemeId, input.sourceUrl, input.title.trim() || '未命名作品', input.author,
+          (id, platform, aweme_id, source_url, title, author, media_type, item_count, imported, source_created_at, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`)
+          .run(collectionId, input.platform ?? 'douyin', input.awemeId, input.sourceUrl, input.title.trim() || '未命名作品', input.author,
             this.collectionType(paths), paths.length, input.sourceCreatedAt, now, now)
         for (let index = 0; index < paths.length; index += 1) {
           const existingAsset = existingByPath.get(pathKeys[index])
@@ -277,9 +277,9 @@ export class LibraryService {
       const now = sqliteNow()
       db.exec('BEGIN')
       try {
-        db.prepare(`UPDATE media_collections SET aweme_id = ?, source_url = ?, title = ?, author = ?,
+        db.prepare(`UPDATE media_collections SET platform = ?, aweme_id = ?, source_url = ?, title = ?, author = ?,
           imported = 0, source_created_at = ?, updated_at = ? WHERE id = ?`)
-          .run(empty.aweme_id, empty.source_url, empty.title, empty.author,
+          .run(empty.platform, empty.aweme_id, empty.source_url, empty.title, empty.author,
             empty.source_created_at, now, candidate.id)
         db.prepare('DELETE FROM media_collections WHERE id = ?').run(empty.id)
         const update = db.prepare(`UPDATE download_jobs SET title = ?, status = 'completed', progress = 1,
@@ -332,10 +332,11 @@ export class LibraryService {
     return this.collectionFromRow(row, true)
   }
 
-  duplicate(awemeId: string | null): Collection | null {
+  duplicate(platform: Platform, awemeId: string | null): Collection | null {
     if (!awemeId) return null
-    const row = this.database.connection.prepare('SELECT * FROM media_collections WHERE aweme_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(awemeId) as Row | undefined
+    const row = this.database.connection.prepare(`SELECT * FROM media_collections
+      WHERE platform = ? AND aweme_id = ? ORDER BY created_at DESC LIMIT 1`)
+      .get(platform, awemeId) as Row | undefined
     return row ? this.collectionFromRow(row, false) : null
   }
 
@@ -457,7 +458,7 @@ export class LibraryService {
     const assets = this.database.connection.prepare('SELECT * FROM media_assets WHERE collection_id = ? ORDER BY sequence')
       .all(row.id) as Row[]
     return {
-      id: String(row.id), aweme_id: row.aweme_id ?? null, source_url: row.source_url ?? null,
+      id: String(row.id), platform: row.platform ?? 'douyin', aweme_id: row.aweme_id ?? null, source_url: row.source_url ?? null,
       title: String(row.title), author: row.author ?? null, media_type: row.media_type,
       item_count: Number(row.item_count), imported: Boolean(row.imported), source_created_at: toIso(row.source_created_at),
       created_at: toIso(row.created_at)!, updated_at: toIso(row.updated_at)!,

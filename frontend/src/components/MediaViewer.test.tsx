@@ -5,7 +5,7 @@ import { MediaViewer } from './MediaViewer'
 import type { Collection } from '../types'
 
 const collection: Collection = {
-  id: 'a'.repeat(32), aweme_id: '123', source_url: 'https://www.douyin.com/video/123', title: '测试视频',
+  id: 'a'.repeat(32), platform: 'douyin', aweme_id: '123', source_url: 'https://www.douyin.com/video/123', title: '测试视频',
   author: '作者', media_type: 'video', item_count: 1, imported: false, source_created_at: null,
   created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', cover_asset_id: 'b'.repeat(32), total_size: 10,
   assets: [{ id: 'b'.repeat(32), filename: '测试视频.mp4', kind: 'video', mime_type: 'video/mp4', extension: 'mp4', size: 10, width: null, height: null, duration: null, sequence: 1 }],

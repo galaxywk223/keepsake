@@ -2,6 +2,13 @@
 
 本文件记录 Windows 桌面端的版本变更。安装包见 [GitHub Releases](https://github.com/galaxywk223/keepsake/releases)。
 
+## 未发布
+
+- 新增小红书支持：视频笔记、图文笔记和实况图（静态图与短视频一起保存）。
+- 站点解析拆分为 `src/main/platforms/` 下的可插拔 extractor。
+- 数据库升级到 v2，任务和作品记录来源平台，重复检测按平台区分。
+- 媒体下载支持多个候选地址依次回退，并拒绝错误的响应类型。
+
 ## v1.3.0 — 2026-10-19
 
 - 产品更名为 Keepsake，启用新标志和琥珀主色。

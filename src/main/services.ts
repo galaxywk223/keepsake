@@ -7,7 +7,7 @@ import { BrowserDownloader } from './downloader'
 import { AudioExtractor } from './audio'
 import { JobManager } from './jobs'
 import { LibraryService } from './library'
-import { extractAwemeId, extractUrls, isSupportedSource, normalizeSourceUrl } from './parser'
+import { extractUrls, identifySource, normalizeSourceUrl } from './parser'
 import type { AppPaths } from './paths'
 
 type Row = Record<string, any>
@@ -57,11 +57,12 @@ export class AppServices {
     const sources: ParsedSource[] = []
     for (const rawUrl of extractUrls(text)) {
       const url = await normalizeSourceUrl(rawUrl)
-      if (!isSupportedSource(url)) continue
-      const awemeId = extractAwemeId(url)
-      const existing = this.library.duplicate(awemeId)
+      const source = identifySource(url)
+      if (!source) continue
+      const awemeId = source.id
+      const existing = this.library.duplicate(source.platform, awemeId)
       sources.push({
-        url, aweme_id: awemeId, duplicate: Boolean(existing), existing_collection_id: existing?.id ?? null,
+        url, platform: source.platform, aweme_id: awemeId, duplicate: Boolean(existing), existing_collection_id: existing?.id ?? null,
       })
     }
     return { sources }
@@ -72,15 +73,16 @@ export class AppServices {
     const results: CreateJobResult[] = []
     for (const rawUrl of urls) {
       const sourceUrl = await normalizeSourceUrl(rawUrl)
-      if (!isSupportedSource(sourceUrl)) throw new Error('仅支持抖音作品链接')
-      const awemeId = extractAwemeId(sourceUrl)
-      const existing = this.library.duplicate(awemeId)
+      const source = identifySource(sourceUrl)
+      if (!source) throw new Error('仅支持抖音、小红书作品链接')
+      const awemeId = source.id
+      const existing = this.library.duplicate(source.platform, awemeId)
       if (existing && !force) {
         results.push({ source_url: sourceUrl, duplicate: true, existing_collection_id: existing.id, job: null })
       } else {
         results.push({
           source_url: sourceUrl, duplicate: false, existing_collection_id: null,
-          job: this.jobs.create(sourceUrl, awemeId, outputDir, force),
+          job: this.jobs.create(sourceUrl, source.platform, awemeId, outputDir, force),
         })
       }
     }
