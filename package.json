@@ -2,7 +2,7 @@
   "name": "keepsake",
   "version": "1.3.0",
   "private": false,
-  "description": "Keepsake — Windows 本地抖音素材下载与管理工具",
+  "description": "Keepsake — 本地抖音视频/图集下载与素材管理工具（Windows / Android）",
   "author": "Wang Kai",
   "license": "MIT",
   "homepage": "https://github.com/galaxywk223/keepsake#readme",
@@ -23,7 +23,10 @@
     "typescript",
     "windows",
     "media-library",
-    "douyin"
+    "douyin",
+    "douyin-downloader",
+    "video-downloader",
+    "tiktok"
   ],
   "main": "out/main/index.js",
   "type": "module",

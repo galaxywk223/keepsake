@@ -1,58 +1,68 @@
 # Keepsake
 
+**简体中文** | [English](README.en.md)
+
 [![CI](https://github.com/galaxywk223/keepsake/actions/workflows/ci.yml/badge.svg)](https://github.com/galaxywk223/keepsake/actions/workflows/ci.yml)
+[![Android](https://github.com/galaxywk223/keepsake/actions/workflows/android.yml/badge.svg)](https://github.com/galaxywk223/keepsake/actions/workflows/android.yml)
 [![Release](https://img.shields.io/github/v/release/galaxywk223/keepsake)](https://github.com/galaxywk223/keepsake/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)](#安装)
 [![License](https://img.shields.io/github/license/galaxywk223/keepsake)](LICENSE)
 
-Keepsake 是面向 Windows 10/11 x64 的本地抖音素材下载与管理工具。应用使用独立 Edge/Chrome 配置保存登录状态，通过 Electron 桌面界面管理下载任务、图片作品、视频文件和音频文件。
+Keepsake 是一款本地优先的抖音素材下载与管理工具，提供 Windows 桌面端和 Android 端。粘贴分享链接即可批量下载视频和图集，还能提取音频，并在本地媒体库中统一预览和整理。所有数据只保存在你自己的设备上。
+
+> [!WARNING]
+> 本项目仅供个人学习和研究使用，**禁止用于商业用途或任何违法用途**。请只下载你有权保存的内容，并遵守相关法律法规和平台用户协议。使用本项目即表示你同意[免责声明](DISCLAIMER.md)。
 
 ![下载界面](docs/screenshots/download.png)
 
 ## 功能
 
+### Windows 桌面端
+
 - 从分享文案、短链接或作品链接中批量提取抖音作品。
-- 下载页面返回的图片或视频资源并显示实时进度。
-- 从已下载的视频提取 MP3 音频，输出码率为 192 kbps。
-- 自动索引本地下载目录，按作品归组多图内容。
-- 提供搜索、媒体类型筛选、排序、网格与列表视图。
-- 支持媒体预览、重命名、打开文件、资源管理器定位和移入回收站。
-- 使用 SQLite 保存设置、任务与媒体索引，不依赖独立服务进程。
-- 使用系统 Edge 或 Chrome 完成登录，安装包内置 FFmpeg 音频转换引擎。
-- 启动后自动检查 GitHub Release，支持后台下载并重启安装更新。
+- 下载图片或视频资源，并实时显示进度。
+- 从已下载的视频提取 MP3 音频（192 kbps），安装包已内置 FFmpeg。
+- 自动索引本地下载目录，多图作品按作品归组。
+- 媒体库支持搜索、按类型筛选、排序，以及网格和列表两种视图。
+- 支持媒体预览、重命名、打开文件、在资源管理器中定位和移入回收站。
+- 用独立的 Edge/Chrome 配置保存登录状态，不影响你日常使用的浏览器。
+- 自动检查 GitHub Release，可在后台下载更新并重启安装。
+
+### Android 端
+
+- 应用内登录抖音，粘贴分享链接即可解析和下载作品。
+- 提供下载任务列表、本地媒体库和媒体查看器。
+- 使用本地 FFmpegKit 提取 MP3 音频，不上传任何文件。
+- 支持把媒体导出到系统相册或媒体库。
+- 数据保存在应用私有目录，卸载即清除。
 
 ## 安装
 
-最新安装包位于 [GitHub Releases](https://github.com/galaxywk223/keepsake/releases/latest)：
+### Windows
 
-```text
-Keepsake-Setup-1.3.0.exe
-```
+从 [GitHub Releases](https://github.com/galaxywk223/keepsake/releases/latest) 下载最新安装包 `Keepsake-Setup-<版本号>.exe`，支持 Windows 10/11 x64。
 
-`v1.3.0` 产品更名为 Keepsake，启用新标志、琥珀主色与深色媒体风格界面（外观可选跟随系统、深色或浅色）。
+- 安装包没有商业代码签名，Windows SmartScreen 可能提示“未知发布者”，点击“更多信息 → 仍要运行”即可。
+- 安装范围为当前用户。卸载时会保留应用数据和已下载的媒体。
+- v1.1.0 起支持应用内更新；v1.0.0 用户需要手动安装一次新版本。
 
-`v1.2.3` 将产品品牌重命名为素匣，并更新应用图标与主色。
+### Android
 
-`v1.2.2` 修复音频提取临时文件扩展名导致 FFmpeg 无法识别 MP3 输出格式的问题。
+Android 端目前还没有发布正式安装包，计划通过 `android-v*` 预发布版本提供 APK，届时会出现在 [Releases](https://github.com/galaxywk223/keepsake/releases) 页面。现在可以按下方[开发](#开发)一节自行构建。系统要求 Android 8.0（API 26）或更高版本。
 
-安装包未进行商业代码签名，Windows SmartScreen 可能显示未知发布者提示。安装范围为当前用户，卸载时保留应用数据和已下载媒体。
-
-`v1.0.0` 不包含应用内更新模块，需要手动安装 `v1.1.0` 或更高版本完成一次升级。`v1.1.0` 起可在设置页检查并安装后续更新。
-
-`v1.1.1` 修复应用专属浏览器在启动接管失败后残留于后台的问题。下载任务会自动接管并清理该专属实例，不影响日常使用的 Edge 或 Chrome。
-
-`v1.1.2` 修复目录自动扫描与下载任务同时登记媒体时的索引冲突，并自动恢复证据完整的历史失败任务。
+各版本的变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 使用流程
 
-1. 设置页确认系统 Edge 或 Chrome 可用。
-2. “配置登录”打开独立浏览器窗口并完成抖音登录。
-3. 下载页粘贴分享文案或作品链接并执行解析。
-4. 选择作品并创建下载任务。
-5. 媒体库完成预览、筛选和本地文件管理。
+1. 在设置页确认系统里有可用的 Edge 或 Chrome。
+2. 点击“配置登录”，在弹出的独立浏览器窗口中登录抖音。
+3. 在下载页粘贴分享文案或作品链接，然后点击解析。
+4. 选择要下载的作品，创建下载任务。
+5. 在媒体库中预览、筛选和管理本地文件。
 
 ![设置界面](docs/screenshots/settings.png)
 
-## 数据目录
+## 数据目录（Windows）
 
 | 路径 | 内容 |
 | --- | --- |
@@ -61,9 +71,21 @@ Keepsake-Setup-1.3.0.exe
 | `%LOCALAPPDATA%\OriginalMediaLibrary\browser-profile` | 独立浏览器登录环境 |
 | `%USERPROFILE%\Downloads\Keepsake` | 新安装的默认下载目录 |
 
-旧版 Web 应用的工作区数据在开发模式首次启动时自动迁移到本地应用数据目录。已有安装继续使用数据库中保存的下载目录，新安装默认使用“Keepsake”目录。下载目录可在设置页修改。
+已有安装会继续使用数据库中保存的下载目录，新安装默认使用 `Keepsake` 目录。下载目录可以在设置页修改。
+
+## 路线图
+
+- [ ] TikTok 支持
+- [ ] 小红书支持
+- [ ] 快手、B 站等更多站点
+- [ ] macOS 与 Linux 构建
+- [ ] Android 正式安装包
+
+欢迎通过 [Issue](https://github.com/galaxywk223/keepsake/issues/new/choose) 提出建议，也欢迎直接提交 Pull Request。
 
 ## 开发
+
+桌面端：
 
 ```powershell
 npm ci
@@ -86,24 +108,34 @@ npm test
 npm run test:e2e
 ```
 
+Android 端需要 JDK 17 和 Android SDK 35，构建前要先用 `android/scripts/build-ffmpeg.sh` 生成本地 FFmpegKit AAR（参考 [android.yml](.github/workflows/android.yml)）：
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
 ## 技术架构
 
-- Electron 主进程负责窗口生命周期、SQLite、文件系统、下载队列和浏览器自动化。
-- Context Bridge 暴露受限桌面 API，IPC 输入通过 Zod 校验。
-- React、TypeScript、TanStack Query 与 Radix UI 构成渲染层。
-- 自定义 `oml-media://` 协议按媒体 ID 提供受目录边界保护的预览流。
-- electron-vite 负责三层构建，electron-builder 生成 NSIS x64 安装包。
+- **桌面端**：Electron 主进程负责窗口生命周期、SQLite、文件系统、下载队列和浏览器自动化；Context Bridge 暴露受限的桌面 API，IPC 输入用 Zod 校验；渲染层使用 React、TypeScript、TanStack Query 和 Radix UI；自定义 `oml-media://` 协议按媒体 ID 提供预览流，并限制在下载目录范围内；electron-vite 负责三层构建，electron-builder 生成 NSIS x64 安装包。
+- **Android 端**：Kotlin + Jetpack Compose，使用 Room 保存数据，WebView 负责登录，FFmpegKit 负责音频转换。
 
-详细边界与数据流参见 [架构说明](docs/ARCHITECTURE.md)。
+详细的边界和数据流见[架构说明](docs/ARCHITECTURE.md)。
 
-## 项目边界
+## 已知限制
 
-- 当前版本仅支持 Windows 10/11 x64。
-- 当前版本不包含代码签名、托盘模式、遥测、macOS 或 Linux 构建。
-- 下载能力依赖抖音页面接口与登录状态，平台变更可能导致功能失效。
-- 项目不隶属于抖音、Microsoft 或 Google。
-- 软件仅适用于有权访问和保存的内容。使用行为应遵守适用法律、平台条款和内容权利要求。
+- 桌面端目前只支持 Windows 10/11 x64，暂无 macOS 和 Linux 构建。
+- 安装包没有代码签名；暂不支持托盘模式；不包含任何遥测。
+- 下载功能依赖抖音的页面接口和登录状态，平台调整可能导致功能失效。
+
+## 免责声明
+
+本项目与抖音、字节跳动、Microsoft、Google 均无关联。完整条款见 [DISCLAIMER.md](DISCLAIMER.md)。
 
 ## 开源信息
 
-项目使用 [MIT License](LICENSE)。第三方软件许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，隐私边界见 [PRIVACY.md](PRIVACY.md)，安全报告流程见 [SECURITY.md](SECURITY.md)。
+源代码以 [MIT License](LICENSE) 开源。第三方软件许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，隐私说明见 [PRIVACY.md](PRIVACY.md)（Windows）和 [PRIVACY-ANDROID.md](PRIVACY-ANDROID.md)（Android），安全问题报告流程见 [SECURITY.md](SECURITY.md)。
+
+如果这个项目对你有帮助，欢迎点一个 ⭐ Star。

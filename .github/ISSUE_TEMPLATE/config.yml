@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞报告 / Security vulnerability
+    url: https://github.com/galaxywk223/keepsake/security/advisories/new
+    about: 请通过 Private vulnerability reporting 私下提交，不要公开发布 / Report privately, not in a public issue
+  - name: 权利人侵权投诉 / Takedown request
+    url: https://github.com/galaxywk223/keepsake/blob/main/DISCLAIMER.md
+    about: 请先阅读免责声明中的侵权处理说明 / See the takedown section of the disclaimer

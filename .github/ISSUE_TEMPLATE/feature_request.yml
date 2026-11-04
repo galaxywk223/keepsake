@@ -1,0 +1,42 @@
+name: 功能建议 / Feature request
+description: 提出新功能或新站点支持 / Suggest a feature or a new site
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: 类型 / Type
+      options:
+        - 新站点支持 / New site support
+        - 新功能 / New feature
+        - 体验改进 / UX improvement
+        - 其他 / Other
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台 / Platform
+      multiple: true
+      options:
+        - Windows
+        - Android
+        - macOS / Linux
+  - type: textarea
+    id: problem
+    attributes:
+      label: 需求背景 / Problem
+      description: 你想解决什么问题 / What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望方案 / Proposed solution
+      description: 如果是新站点，请说明站点名称和需要支持的内容类型（视频、图集、音频等）/ For a new site, name it and the content types you need (video, images, audio, etc.)
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 其他补充 / Additional context
