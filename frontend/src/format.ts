@@ -3,6 +3,8 @@ import type { Platform } from './types'
 const PLATFORM_LABELS: Record<Platform, { name: string; work: string }> = {
   douyin: { name: '抖音', work: '抖音作品' },
   xiaohongshu: { name: '小红书', work: '小红书笔记' },
+  bilibili: { name: 'B 站', work: 'B 站视频' },
+  tiktok: { name: 'TikTok', work: 'TikTok 作品' },
 }
 
 export function platformLabel(platform: Platform | null | undefined): string {

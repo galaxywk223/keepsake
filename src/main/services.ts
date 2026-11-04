@@ -7,7 +7,7 @@ import { BrowserDownloader } from './downloader'
 import { AudioExtractor } from './audio'
 import { JobManager } from './jobs'
 import { LibraryService } from './library'
-import { extractUrls, identifySource, normalizeSourceUrl } from './parser'
+import { extractUrls, identifySource, normalizeSourceUrl, UNSUPPORTED_SOURCE } from './parser'
 import type { AppPaths } from './paths'
 
 type Row = Record<string, any>
@@ -74,7 +74,7 @@ export class AppServices {
     for (const rawUrl of urls) {
       const sourceUrl = await normalizeSourceUrl(rawUrl)
       const source = identifySource(sourceUrl)
-      if (!source) throw new Error('仅支持抖音、小红书作品链接')
+      if (!source) throw new Error(UNSUPPORTED_SOURCE)
       const awemeId = source.id
       const existing = this.library.duplicate(source.platform, awemeId)
       if (existing && !force) {

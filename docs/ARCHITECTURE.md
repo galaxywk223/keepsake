@@ -22,7 +22,8 @@ flowchart LR
 | `src/main/ipc.ts` | IPC 路由与输入校验 |
 | `src/main/services.ts` | 应用服务编排、设置与目录监听 |
 | `src/main/downloader.ts` | 登录浏览器、调用站点 extractor 与流式下载（多地址回退） |
-| `src/main/platforms/` | 站点 extractor：链接识别、短链规范化、页面详情捕获与媒体候选（抖音、小红书） |
+| `src/main/platforms/` | 站点 extractor：链接识别、短链规范化、页面详情捕获与媒体候选（抖音、小红书、B 站、TikTok） |
+| `src/main/mux.ts` | 用内置 FFmpeg 无损合并分离的音视频流（B 站 DASH） |
 | `src/main/parser.ts` | 分享文本中的链接提取，并把链接分派到对应站点 |
 | `src/main/audio.ts` | 使用内置 FFmpeg 从视频生成 MP3 音频 |
 | `src/main/jobs.ts` | 持久化任务队列、取消、重试与状态转换 |

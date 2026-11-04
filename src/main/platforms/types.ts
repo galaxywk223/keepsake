@@ -9,6 +9,8 @@ export interface Candidate {
   kind: 'image' | 'video'
   /** File sequence used in the `_NN` filename suffix. Live photo pairs share one sequence. */
   sequence: number
+  /** Separate audio stream (DASH); when set, `urls` is video-only and both are merged into one MP4. */
+  audioUrls?: string[]
 }
 
 export interface SiteDetail {
@@ -17,6 +19,8 @@ export interface SiteDetail {
   author: string | null
   createdAt: string | null
   candidates: Candidate[]
+  /** Extra request headers for media downloads, e.g. the page's cookies when the CDN requires them. */
+  headers?: Record<string, string>
 }
 
 export interface SiteExtractor {
@@ -51,6 +55,20 @@ export async function followRedirects(url: string): Promise<string> {
   } catch {
     // The browser resolves the link again when the page is opened.
     return url
+  }
+}
+
+/** Builds a Cookie header from the browser's cookies for the given site domains. */
+export async function cookieHeader(page: Page, domains: readonly string[]): Promise<string | null> {
+  try {
+    const cookies = await page.browser().cookies()
+    const matching = cookies.filter((cookie) => {
+      const domain = cookie.domain.replace(/^\./, '').toLowerCase()
+      return domains.some((allowed) => domain === allowed || domain.endsWith(`.${allowed}`))
+    })
+    return matching.length ? matching.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ') : null
+  } catch {
+    return null
   }
 }
 

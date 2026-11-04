@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { EventEmitter } from 'node:events'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Browser } from 'puppeteer-core'
@@ -291,6 +291,77 @@ describe('BrowserDownloader profile recovery', () => {
     expect(result.paths.map((path) => path.split(/[\\/]/).at(-1))).toEqual([
       '实况笔记_01.jpg', '实况笔记_02.jpg', '实况笔记_02.mp4',
     ])
+  })
+
+  test('merges Bilibili DASH video and audio into one MP4 and removes the temporary streams', async () => {
+    const paths = await createPaths()
+    const cid = '43270800926'
+    const page = Object.assign(new FakePage(), {
+      url: vi.fn(() => 'https://www.bilibili.com/video/BV1RA4w6AE74/'),
+      evaluate: vi.fn(async (fn: () => unknown) => (String(fn).includes('__playinfo__')
+        ? { dash: {
+          video: [{ id: 32, codecid: 7, bandwidth: 1, baseUrl: `https://upos.bilivideo.com/x/${cid}/${cid}-1-30032.m4s` }],
+          audio: [{ id: 30280, bandwidth: 1, baseUrl: `https://upos.bilivideo.com/x/${cid}/${cid}-1-30280.m4s` }],
+        } }
+        : { bvid: 'BV1RA4w6AE74', title: '合并测试', cid, owner: { name: 'UP' }, pages: [{ page: 1, cid, part: 'p1' }] })),
+    })
+    const browserApi: BrowserApi = {
+      launch: vi.fn(async () => asBrowser(new FakeBrowser(page))),
+      connect: vi.fn(async () => { throw new Error('not running') }),
+    }
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>).Referer).toBe('https://www.bilibili.com/')
+      return new Response(new Uint8Array(url.includes('30280') ? [9] : [1, 2]), {
+        status: 200, headers: { 'content-type': 'video/mp4', 'content-length': url.includes('30280') ? '1' : '2' },
+      })
+    }))
+    const muxer = vi.fn(async (video: string, audio: string, output: string) => {
+      expect(video.endsWith('.video.part')).toBe(true)
+      expect(audio.endsWith('.audio.part')).toBe(true)
+      await writeFile(output, Buffer.from('muxed'))
+    })
+    const downloader = new BrowserDownloader(paths, { browserApi, recoveryTimeoutMs: 20, recoveryPollMs: 1, muxer })
+    vi.spyOn(downloader, 'browserExecutable').mockReturnValue('C:\\Edge\\msedge.exe')
+    const progress = vi.fn()
+
+    const result = await downloader.download('https://www.bilibili.com/video/BV1RA4w6AE74/', paths.defaultDownloadDir,
+      new AbortController().signal, progress)
+
+    expect(muxer).toHaveBeenCalledOnce()
+    expect(result).toMatchObject({ platform: 'bilibili', awemeId: 'BV1RA4w6AE74', title: '合并测试' })
+    expect(result.paths.map((path) => path.split(/[\\/]/).at(-1))).toEqual(['合并测试_01.mp4'])
+    expect(await readdir(paths.defaultDownloadDir)).toEqual(['合并测试_01.mp4'])
+    expect(progress).toHaveBeenLastCalledWith(1, 1, 3, 3)
+  })
+
+  test('sends TikTok cookies only to TikTok domains', async () => {
+    const paths = await createPaths()
+    const page = Object.assign(new FakePage(), {
+      evaluate: vi.fn(async () => ({ item: {
+        id: '7688727548670397704', desc: 'clip', createTime: '1790171389', author: { nickname: 'n' },
+        video: { bitrateInfo: [{ CodecType: 'h264', Bitrate: 1, PlayAddr: { UrlList: ['https://cdn.example.net/v.mp4', 'https://v16.tiktok.com/v.mp4'] } }] },
+      } })),
+      browser: () => ({ cookies: async () => [
+        { name: 'tt_chain_token', value: 'secret', domain: '.tiktok.com' },
+        { name: 'other', value: 'x', domain: '.example.net' },
+      ] }),
+    })
+    const browserApi: BrowserApi = {
+      launch: vi.fn(async () => asBrowser(new FakeBrowser(page))),
+      connect: vi.fn(async () => { throw new Error('not running') }),
+    }
+    const seen: Array<[string, string | undefined]> = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      const cookie = (init?.headers as Record<string, string>).Cookie
+      seen.push([new URL(url).hostname, cookie])
+      if (url.includes('example.net')) return new Response('denied', { status: 403 })
+      return new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'video/mp4' } })
+    }))
+
+    await createDownloader(paths, browserApi).download('https://www.tiktok.com/@n/video/7688727548670397704',
+      paths.defaultDownloadDir, new AbortController().signal, () => undefined)
+
+    expect(seen).toEqual([['cdn.example.net', undefined], ['v16.tiktok.com', 'tt_chain_token=secret']])
   })
 
   test('maps the Xiaohongshu login wall to its own message', () => {

@@ -4,8 +4,10 @@ import { access, mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { Platform } from '../shared/contracts'
 import type { AppPaths } from './paths'
-import { normalizeSourceUrl } from './parser'
+import { normalizeSourceUrl, UNSUPPORTED_SOURCE } from './parser'
+import { createFfmpegMuxer, type Muxer } from './mux'
 import { DownloadCancelled, extractorFor, extractors, type Candidate } from './platforms'
+import { hostMatches } from './platforms/types'
 
 export { DownloadCancelled }
 
@@ -35,6 +37,7 @@ export interface BrowserDownloaderDependencies {
   browserApi?: BrowserApi
   recoveryTimeoutMs?: number
   recoveryPollMs?: number
+  muxer?: Muxer
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -46,11 +49,13 @@ export class BrowserDownloader {
   private readonly browserApi: BrowserApi
   private readonly recoveryTimeoutMs: number
   private readonly recoveryPollMs: number
+  private readonly muxer: Muxer
 
   constructor(private readonly paths: AppPaths, dependencies: BrowserDownloaderDependencies = {}) {
     this.browserApi = dependencies.browserApi ?? puppeteer
     this.recoveryTimeoutMs = dependencies.recoveryTimeoutMs ?? RECOVERY_TIMEOUT_MS
     this.recoveryPollMs = dependencies.recoveryPollMs ?? RECOVERY_POLL_MS
+    this.muxer = dependencies.muxer ?? createFfmpegMuxer()
   }
 
   browserExecutable(): string | null {
@@ -115,7 +120,7 @@ export class BrowserDownloader {
     if (!executablePath) throw new Error('未找到 Microsoft Edge 或 Google Chrome')
     const url = await normalizeSourceUrl(source)
     const extractor = extractorFor(url)
-    if (!extractor) throw new Error('仅支持抖音、小红书作品链接')
+    if (!extractor) throw new Error(UNSUPPORTED_SOURCE)
     let browser: Browser | null = null
     try {
       browser = await this.launchManaged({
@@ -136,7 +141,7 @@ export class BrowserDownloader {
       for (const [index, candidate] of candidates.entries()) {
         if (signal.aborted) throw new DownloadCancelled('下载已取消')
         paths.push(await this.downloadCandidate(candidate, index + 1, candidates.length, multiple, outputDir, title,
-          extractor.referer, signal, progress))
+          { Referer: extractor.referer, ...detail.headers }, extractor.hosts, signal, progress))
       }
       return {
         sourceUrl: url, platform: extractor.platform, paths, title: detail.title, author: detail.author,
@@ -211,42 +216,76 @@ export class BrowserDownloader {
 
   private async downloadCandidate(
     candidate: Candidate, current: number, total: number, multiple: boolean, outputDir: string, title: string,
-    referer: string, signal: AbortSignal,
+    headers: Record<string, string>, cookieHosts: readonly string[], signal: AbortSignal,
     progress: (current: number, total: number, downloaded: number, itemTotal: number) => void,
   ): Promise<string> {
+    const video = await this.openFirst(candidate.urls, candidate.kind, headers, cookieHosts, signal)
+    const audio = candidate.audioUrls?.length ? await this.openFirst(candidate.audioUrls, 'audio', headers, cookieHosts, signal)
+      .catch(async (error) => { await video.response.body?.cancel().catch(() => undefined); throw error }) : null
+    const extension = audio ? '.mp4' : extensionFor(video.url, video.contentType, candidate.kind)
+    const suffix = `_${String(multiple ? candidate.sequence : 1).padStart(2, '0')}`
+    const path = await uniquePath(join(outputDir, `${title}${suffix}${extension}`))
+    const partial = `${path}.part`
+    const sizes = [video, audio].map((item) => Number(item?.response.headers.get('content-length') || 0))
+    const itemTotal = sizes[0] + sizes[1]
+    const report = (offset: number) => (bytes: number) => progress(current, total, offset + bytes, itemTotal)
+    if (!audio) {
+      await this.writeTo(video.response, partial, signal, report(0))
+      return this.finish(partial, path)
+    }
+    const videoPart = `${path}.video.part`
+    const audioPart = `${path}.audio.part`
+    try {
+      const videoBytes = await this.writeTo(video.response, videoPart, signal, report(0))
+      await this.writeTo(audio.response, audioPart, signal, report(videoBytes))
+      if (signal.aborted) throw new DownloadCancelled('下载已取消')
+      await this.muxer(videoPart, audioPart, partial, signal).catch((error) => {
+        if (signal.aborted) throw new DownloadCancelled('下载已取消')
+        throw error
+      })
+      return await this.finish(partial, path)
+    } catch (error) {
+      await video.response.body?.cancel().catch(() => undefined)
+      await audio.response.body?.cancel().catch(() => undefined)
+      await unlink(partial).catch(() => undefined)
+      throw error
+    } finally {
+      await unlink(videoPart).catch(() => undefined)
+      await unlink(audioPart).catch(() => undefined)
+    }
+  }
+
+  /** Requests each URL in order and returns the first usable media response. */
+  private async openFirst(
+    urls: string[], kind: 'image' | 'video' | 'audio', headers: Record<string, string>, cookieHosts: readonly string[],
+    signal: AbortSignal,
+  ): Promise<{ response: Response; url: string; contentType: string }> {
     let lastError: unknown = null
-    for (const url of candidate.urls) {
+    for (const url of urls) {
       if (signal.aborted) throw new DownloadCancelled('下载已取消')
       let response: Response
       try {
-        response = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Referer: referer }, signal })
+        response = await fetch(url, { headers: { 'User-Agent': USER_AGENT, ...headersFor(url, headers, cookieHosts) }, signal })
       } catch (error) {
         if (signal.aborted) throw new DownloadCancelled('下载已取消')
         lastError = error
         continue
       }
       const contentType = response.headers.get('content-type') || ''
-      if (!response.ok || !response.body || !matchesKind(contentType, candidate.kind)) {
+      if (!response.ok || !response.body || !matchesKind(contentType, kind)) {
         await response.body?.cancel().catch(() => undefined)
         lastError = new Error(`媒体请求失败 (${response.status})`)
         continue
       }
-      const extension = extensionFor(url, contentType, candidate.kind)
-      const suffix = `_${String(multiple ? candidate.sequence : 1).padStart(2, '0')}`
-      const path = await uniquePath(join(outputDir, `${title}${suffix}${extension}`))
-      return this.writeStream(response, path, current, total, signal, progress)
+      return { response, url, contentType }
     }
     throw lastError instanceof Error ? lastError : new Error('媒体请求失败')
   }
 
-  private async writeStream(
-    response: Response, path: string, current: number, total: number, signal: AbortSignal,
-    progress: (current: number, total: number, downloaded: number, itemTotal: number) => void,
-  ): Promise<string> {
-    const partial = `${path}.part`
-    const file = await open(partial, 'w')
+  /** Streams the body into `path` and returns the number of bytes written; removes the file on failure. */
+  private async writeTo(response: Response, path: string, signal: AbortSignal, onBytes: (bytes: number) => void): Promise<number> {
+    const file = await open(path, 'w')
     const reader = response.body!.getReader()
-    const itemTotal = Number(response.headers.get('content-length') || 0)
     let downloaded = 0
     try {
       while (true) {
@@ -255,17 +294,33 @@ export class BrowserDownloader {
         if (done) break
         await file.write(value)
         downloaded += value.byteLength
-        progress(current, total, downloaded, itemTotal)
+        onBytes(downloaded)
       }
       await file.close()
+      return downloaded
+    } catch (error) {
+      await reader.cancel().catch(() => undefined)
+      await file.close().catch(() => undefined)
+      await unlink(path).catch(() => undefined)
+      throw error
+    }
+  }
+
+  private async finish(partial: string, path: string): Promise<string> {
+    try {
       await rename(partial, path)
       return path
     } catch (error) {
-      await file.close().catch(() => undefined)
       await unlink(partial).catch(() => undefined)
       throw error
     }
   }
+}
+
+/** Site cookies are only sent to the site's own domains, never to third-party media hosts. */
+function headersFor(url: string, headers: Record<string, string>, cookieHosts: readonly string[]): Record<string, string> {
+  if (!headers.Cookie || hostMatches(url, cookieHosts)) return headers
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => name !== 'Cookie'))
 }
 
 function isProfileLockError(error: unknown): boolean {
@@ -282,9 +337,11 @@ function safeName(value: unknown, fallback: string): string {
 }
 
 /** Rejects HTML error pages and mismatched media served with a 200 status. */
-function matchesKind(contentType: string, kind: 'image' | 'video'): boolean {
+function matchesKind(contentType: string, kind: 'image' | 'video' | 'audio'): boolean {
   const type = contentType.toLowerCase()
   if (type.startsWith('text/') || type.includes('json') || type.includes('xml')) return false
+  // DASH audio is often served as video/mp4, so only images are excluded for audio streams.
+  if (kind === 'audio') return !type.startsWith('image/')
   const other = kind === 'image' ? 'video/' : 'image/'
   return !type.startsWith(other)
 }

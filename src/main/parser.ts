@@ -1,5 +1,7 @@
 import type { Platform } from '../shared/contracts'
-import { extractorFor } from './platforms'
+import { extractorFor, extractors } from './platforms'
+
+export const UNSUPPORTED_SOURCE = `仅支持${extractors.map((extractor) => extractor.label).join('、')}作品链接`
 
 // ASCII `?` must stay inside the match: Xiaohongshu links need their query (xsec_token).
 const URL_PATTERN = /https?:\/\/[^\s，。；、！？）)】\]]+/g

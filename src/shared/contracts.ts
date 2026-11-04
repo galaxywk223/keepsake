@@ -1,6 +1,6 @@
 export type PageId = 'download' | 'library' | 'tasks'
 
-export type Platform = 'douyin' | 'xiaohongshu'
+export type Platform = 'douyin' | 'xiaohongshu' | 'bilibili' | 'tiktok'
 
 export type UpdatePhase = 'unsupported' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error'
 

@@ -1,9 +1,11 @@
 import type { Platform } from '../../shared/contracts'
+import { bilibili } from './bilibili'
 import { douyin } from './douyin'
+import { tiktok } from './tiktok'
 import { hostMatches, type SiteExtractor } from './types'
 import { xiaohongshu } from './xiaohongshu'
 
-export const extractors: readonly SiteExtractor[] = [douyin, xiaohongshu]
+export const extractors: readonly SiteExtractor[] = [douyin, xiaohongshu, bilibili, tiktok]
 
 export function extractorFor(url: string): SiteExtractor | null {
   return extractors.find((extractor) => hostMatches(url, extractor.hosts)) ?? null
